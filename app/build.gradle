@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'io.github.christianlinzatti.glyphscanner'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'io.github.christianlinzatti.glyphscanner'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+
+    // Fixed key so that updates install over the previous version.
+    signingConfigs {
+        shared {
+            storeFile file('glyphscanner.keystore')
+            storePassword 'glyphscanner'
+            keyAlias 'glyphscanner'
+            keyPassword 'glyphscanner'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.shared
+        }
+        debug {
+            signingConfig signingConfigs.shared
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
