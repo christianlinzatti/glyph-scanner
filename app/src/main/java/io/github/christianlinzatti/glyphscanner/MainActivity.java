@@ -58,7 +58,7 @@ public class MainActivity extends Activity {
                         + "2. „Starten“ tippen und die Bildschirmaufnahme erlauben "
                         + "(bei Nachfrage „Gesamter Bildschirm“ wählen).\n"
                         + "3. In Ingress einen Glyph-Hack starten – die Sequenz erscheint oben.\n\n"
-                        + "Overlay: ✕ beendet, ↻ leert die Anzeige, ↻ lange drücken = Diagnose. "
+                        + "Overlay: ✕ beendet, ↻ leert die Anzeige (passiert 8 s nach dem Hack auch automatisch), ↻ lange drücken = Diagnose. "
                         + "Die Leiste lässt sich vertikal verschieben – nicht über die Hexagon-Reihe von Ingress legen.");
         root.addView(info);
 

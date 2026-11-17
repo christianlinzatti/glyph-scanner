@@ -73,6 +73,16 @@ public class CaptureService extends Service implements OverlayController.Callbac
 
     private final Runnable processRunnable = this::processLatest;
 
+    /** After a hack: this long without the glyph screen -> clear and wait for the next one. */
+    private static final long AUTO_RESET_MS = 8000;
+    private final Runnable autoResetTick = new Runnable() {
+        @Override
+        public void run() {
+            checkAutoReset(SystemClock.uptimeMillis());
+            if (bg != null) bg.postDelayed(this, 1000);
+        }
+    };
+
     @Override
     public IBinder onBind(Intent intent) {
         return null;
@@ -124,6 +134,7 @@ public class CaptureService extends Service implements OverlayController.Callbac
         worker.start();
         bg = new Handler(worker.getLooper());
 
+        bg.postDelayed(autoResetTick, 1000);
         try {
             startCapture();
         } catch (RuntimeException e) {
@@ -217,6 +228,7 @@ public class CaptureService extends Service implements OverlayController.Callbac
                     if (overlay != null) overlay.setExpanded(ex, scale);
                 });
             }
+            if (checkAutoReset(lastFrameMs)) return;
             String status = debug ? a.debug : statusText(s, expanded);
             if (changed || !status.equals(lastStatus)) {
                 lastStatus = status;
@@ -230,6 +242,25 @@ public class CaptureService extends Service implements OverlayController.Callbac
         } finally {
             if (img != null) img.close();
         }
+    }
+
+    /** Runs on the worker thread. @return true if the sequence was cleared. */
+    private boolean checkAutoReset(long now) {
+        if (lastHackScreenMs < 0 || now - lastHackScreenMs < AUTO_RESET_MS) return false;
+        if (tracker.snapshot().count == 0) return false;
+        tracker.reset();
+        lastHackScreenMs = -1;
+        expanded = false;
+        lastStatus = "Bereit";
+        final boolean dbg = debug;
+        final SequenceTracker.State empty = tracker.snapshot();
+        main.post(() -> {
+            if (overlay != null) {
+                overlay.setExpanded(false, 1f);
+                overlay.update(empty, "Bereit", dbg);
+            }
+        });
+        return true;
     }
 
     private static String statusText(SequenceTracker.State s, boolean expanded) {
