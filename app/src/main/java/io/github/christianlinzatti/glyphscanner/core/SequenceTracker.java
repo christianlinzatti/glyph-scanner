@@ -10,16 +10,23 @@ import java.util.Map;
  */
 public final class SequenceTracker {
 
-    /** No glyph screen for this long while showing -> next display starts a new sequence. */
-    private static final long NEW_SEQUENCE_GAP_MS = 2500;
+    /** No glyph screen for this long -> the next display phase is a new hack. */
+    private static final long NEW_SEQUENCE_GAP_MS = 3000;
 
     private int count;
     private Map<Long, Integer>[] votes;
     private long[] best = new long[0];
 
-    private long lastDisplayMs = -1;
-    private boolean sawInputSinceDisplay;
+    /**
+     * Set as soon as the display phase is over (timer seen, or the highlight jumped
+     * back to an earlier slot). While locked, nothing on screen can change the glyphs,
+     * so the player's own drawing never overwrites what was read.
+     */
+    private boolean locked;
+    private int maxShownIndex = -1;
+    private long lastGlyphScreenMs = -1;
     private int pendingCount = -1;
+    private int jumpBackFrames;
 
     private long prevEdges;
     private int prevIndex = -1;
@@ -33,8 +40,9 @@ public final class SequenceTracker {
         count = 0;
         votes = null;
         best = new long[0];
-        lastDisplayMs = -1;
-        sawInputSinceDisplay = false;
+        locked = false;
+        maxShownIndex = -1;
+        lastGlyphScreenMs = -1;
         pendingCount = -1;
         prevEdges = 0;
         prevIndex = -1;
@@ -48,9 +56,12 @@ public final class SequenceTracker {
         votes = new Map[n];
         for (int i = 0; i < n; i++) votes[i] = new HashMap<>();
         best = new long[n];
+        locked = false;
+        maxShownIndex = -1;
+        pendingCount = -1;
+        jumpBackFrames = 0;
         prevEdges = 0;
         prevIndex = -1;
-        sawInputSinceDisplay = false;
         inputIndex = -1;
     }
 
@@ -58,42 +69,62 @@ public final class SequenceTracker {
     public synchronized boolean update(Analysis a, long nowMs) {
         String before = signature();
         onGlyphScreen = a.glyphScreen;
+        boolean gap = lastGlyphScreenMs < 0 || nowMs - lastGlyphScreenMs > NEW_SEQUENCE_GAP_MS;
+        if (a.glyphScreen) lastGlyphScreenMs = nowMs;
 
-        if (a.glyphScreen && !a.inputPhase && a.count > 0) {
-            inputPhase = false;
+        if (!a.glyphScreen || a.count <= 0) {
+            displayIndex = -1;
             inputIndex = -1;
-            boolean gap = lastDisplayMs >= 0 && nowMs - lastDisplayMs > NEW_SEQUENCE_GAP_MS;
-            boolean newSeq = count == 0 || sawInputSinceDisplay || gap;
-            if (!newSeq && a.count != count) {
+            inputPhase = false;
+            return !before.equals(signature());
+        }
+
+        boolean display = !a.inputPhase;
+        if (display) {
+            if (count == 0) {
+                start(a.count);
+            } else if (locked) {
+                // a new hack only after a real pause, starting with the first glyph
+                if (gap && a.current == 0) start(a.count);
+                else display = false;
+            } else if (gap && a.current == 0) {
+                start(a.count);
+            } else if (a.count != count) {
                 // only trust a changed length if it is seen twice in a row
-                if (pendingCount == a.count) newSeq = true;
-                pendingCount = a.count;
-            } else {
-                pendingCount = -1;
-            }
-            if (newSeq) start(a.count);
-            lastDisplayMs = nowMs;
-
-            if (a.count == count && a.current >= 0 && a.current < count) {
-                displayIndex = a.current;
-                if (a.edges != 0 && a.edges == prevEdges && a.current == prevIndex) {
-                    Map<Long, Integer> v = votes[a.current];
-                    Integer old = v.get(a.edges);
-                    v.put(a.edges, old == null ? 1 : old + 1);
-                    best[a.current] = pick(v);
+                if (pendingCount == a.count) start(a.count);
+                else {
+                    pendingCount = a.count;
+                    display = false;
                 }
-                prevEdges = a.edges;
-                prevIndex = a.current;
+            } else if (a.current >= 0 && a.current < maxShownIndex) {
+                // highlight jumped back -> display phase is over, player is drawing
+                // (confirmed on two frames so a single misread cannot end the display)
+                if (++jumpBackFrames >= 2) locked = true;
+                display = false;
+            } else {
+                jumpBackFrames = 0;
             }
-        } else if (a.glyphScreen && a.inputPhase) {
-            inputPhase = true;
-            sawInputSinceDisplay = true;
-            displayIndex = -1;
-            inputIndex = (a.count == count) ? a.current : -1;
         } else {
-            displayIndex = -1;
-            inputIndex = -1;
+            if (count > 0) locked = true;
+        }
+
+        if (display && a.count == count && a.current >= 0 && a.current < count) {
             inputPhase = false;
+            inputIndex = -1;
+            displayIndex = a.current;
+            maxShownIndex = Math.max(maxShownIndex, a.current);
+            if (a.edges != 0 && a.edges == prevEdges && a.current == prevIndex) {
+                Map<Long, Integer> v = votes[a.current];
+                Integer old = v.get(a.edges);
+                v.put(a.edges, old == null ? 1 : old + 1);
+                best[a.current] = pick(v);
+            }
+            prevEdges = a.edges;
+            prevIndex = a.current;
+        } else if (!display) {
+            inputPhase = locked;
+            displayIndex = -1;
+            inputIndex = (locked && a.count == count) ? a.current : -1;
         }
         return !before.equals(signature());
     }
