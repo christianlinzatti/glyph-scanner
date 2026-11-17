@@ -86,7 +86,14 @@ public final class ScreenAnalyzer {
         }
 
         int[] row = findHexRow(f);
-        if (row == null) return Analysis.none("keine Glyph-Reihe");
+        if (row == null) {
+            int nodes = countNodes(f);
+            if (nodes >= 9) {
+                return new Analysis(false, timerVisible(f), 0, -1, 0L, true,
+                        "Gitter " + nodes + "/11, Reihe verdeckt");
+            }
+            return Analysis.none("keine Glyph-Reihe");
+        }
         int count = row[0], current = row[1];
 
         if (!calibrated) tryCalibrate(f);

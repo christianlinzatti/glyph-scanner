@@ -66,6 +66,10 @@ public class CaptureService extends Service implements OverlayController.Callbac
     private boolean wasCalibrated;
     private volatile boolean debug;
     private String lastStatus = "";
+    private long lastHackScreenMs = -1;
+    private boolean expanded;
+    static final String KEY_ICON_SCALE = "icon_scale";
+    static final int DEFAULT_ICON_SCALE = 180; // percent
 
     private final Runnable processRunnable = this::processLatest;
 
@@ -201,7 +205,19 @@ public class CaptureService extends Service implements OverlayController.Callbac
 
             boolean changed = tracker.update(a, lastFrameMs);
             SequenceTracker.State s = tracker.snapshot();
-            String status = debug ? a.debug : statusText(s);
+
+            if (a.glyphScreen || a.gridVisible) lastHackScreenMs = lastFrameMs;
+            boolean wantExpanded = s.locked && s.count > 0
+                    && lastHackScreenMs >= 0 && lastFrameMs - lastHackScreenMs < 2500;
+            if (wantExpanded != expanded) {
+                expanded = wantExpanded;
+                final boolean ex = wantExpanded;
+                final float scale = prefs.getInt(KEY_ICON_SCALE, DEFAULT_ICON_SCALE) / 100f;
+                main.post(() -> {
+                    if (overlay != null) overlay.setExpanded(ex, scale);
+                });
+            }
+            String status = debug ? a.debug : statusText(s, expanded);
             if (changed || !status.equals(lastStatus)) {
                 lastStatus = status;
                 final boolean dbg = debug;
@@ -216,7 +232,8 @@ public class CaptureService extends Service implements OverlayController.Callbac
         }
     }
 
-    private static String statusText(SequenceTracker.State s) {
+    private static String statusText(SequenceTracker.State s, boolean expanded) {
+        if (expanded && !s.onGlyphScreen) return "Eingabe";
         if (!s.onGlyphScreen) return s.count > 0 ? "Fertig" : "Bereit";
         if (s.inputPhase) return s.inputIndex >= 0 ? "Zeichne " + (s.inputIndex + 1) + "/" + s.count : "Eingabe";
         if (s.displayIndex >= 0) return "Lese " + (s.displayIndex + 1) + "/" + s.count;
@@ -256,6 +273,8 @@ public class CaptureService extends Service implements OverlayController.Callbac
     @Override
     public void onResetRequested() {
         tracker.reset();
+        if (overlay != null) overlay.setExpanded(false, 1f);
+        if (bg != null) bg.post(() -> expanded = false);
         lastStatus = "";
         if (overlay != null) overlay.update(tracker.snapshot(), "Zurückgesetzt", debug);
     }

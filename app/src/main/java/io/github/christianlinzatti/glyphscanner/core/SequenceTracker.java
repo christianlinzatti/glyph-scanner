@@ -70,7 +70,7 @@ public final class SequenceTracker {
         String before = signature();
         onGlyphScreen = a.glyphScreen;
         boolean gap = lastGlyphScreenMs < 0 || nowMs - lastGlyphScreenMs > NEW_SEQUENCE_GAP_MS;
-        if (a.glyphScreen) lastGlyphScreenMs = nowMs;
+        if (a.glyphScreen || a.gridVisible) lastGlyphScreenMs = nowMs;
 
         if (!a.glyphScreen || a.count <= 0) {
             displayIndex = -1;
@@ -146,14 +146,14 @@ public final class SequenceTracker {
     private String signature() {
         StringBuilder sb = new StringBuilder();
         sb.append(count).append('|').append(displayIndex).append('|').append(inputIndex).append('|')
-                .append(onGlyphScreen).append(inputPhase);
+                .append(onGlyphScreen).append(inputPhase).append(locked);
         for (long b : best) sb.append(',').append(b);
         return sb.toString();
     }
 
     /** Immutable view for drawing. */
     public synchronized State snapshot() {
-        return new State(count, best.clone(), displayIndex, inputIndex, onGlyphScreen, inputPhase);
+        return new State(count, best.clone(), displayIndex, inputIndex, onGlyphScreen, inputPhase, locked);
     }
 
     public static final class State {
@@ -163,18 +163,22 @@ public final class SequenceTracker {
         public final int inputIndex;
         public final boolean onGlyphScreen;
         public final boolean inputPhase;
+        /** Display phase is over; the glyphs are final. */
+        public final boolean locked;
 
-        State(int count, long[] glyphs, int displayIndex, int inputIndex, boolean onGlyphScreen, boolean inputPhase) {
+        State(int count, long[] glyphs, int displayIndex, int inputIndex, boolean onGlyphScreen,
+              boolean inputPhase, boolean locked) {
             this.count = count;
             this.glyphs = glyphs;
             this.displayIndex = displayIndex;
             this.inputIndex = inputIndex;
             this.onGlyphScreen = onGlyphScreen;
             this.inputPhase = inputPhase;
+            this.locked = locked;
         }
 
         public static State empty() {
-            return new State(0, new long[0], -1, -1, false, false);
+            return new State(0, new long[0], -1, -1, false, false, false);
         }
     }
 }

@@ -55,6 +55,8 @@ final class GlyphStripView extends View {
     private SequenceTracker.State state = SequenceTracker.State.empty();
     private String status = "";
     private boolean debug;
+    private boolean showNames = true;
+    private final float baseLabelSize;
 
     // button geometry, updated in onDraw
     private float closeCx, resetCx, btnCy, btnR;
@@ -88,6 +90,7 @@ final class GlyphStripView extends View {
         label.setTextAlign(Paint.Align.LEFT);
         label.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 11, getResources().getDisplayMetrics()));
         label.setFakeBoldText(true);
+        baseLabelSize = label.getTextSize();
         small.setColor(0xFFB8C4CC);
         small.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 9, getResources().getDisplayMetrics()));
         symbol.setColor(Color.WHITE);
@@ -95,7 +98,8 @@ final class GlyphStripView extends View {
         symbol.setStrokeCap(Paint.Cap.ROUND);
     }
 
-    void setData(SequenceTracker.State state, String status, boolean debug) {
+    void setData(SequenceTracker.State state, String status, boolean debug, boolean showNames) {
+        this.showNames = showNames;
         this.state = state;
         this.status = status == null ? "" : status;
         this.debug = debug;
@@ -122,34 +126,39 @@ final class GlyphStripView extends View {
         rect.set(0, 0, w, h);
         c.drawRoundRect(rect, 10 * dp, 10 * dp, bg);
 
-        float labelH = label.getTextSize() * 1.35f;
-        // horizontal units: 2 buttons (0.7 slot each) + 5 slots
-        float slotW = (w - 2 * pad - 6 * dp) / (MAX_SLOTS + 1.4f);
+        // label grows with the strip (large mode while drawing)
+        label.setTextSize(Math.max(baseLabelSize, Math.min(h * 0.11f, baseLabelSize * 1.8f)));
+        float labelH = showNames ? label.getTextSize() * 1.35f : 0f;
+
+        // buttons: two units of 0.7, glyph slots share the rest
+        float unit = (w - 2 * pad - 6 * dp) / (MAX_SLOTS + 1.4f);
+        float slotsLeft = pad + 1.4f * unit + 6 * dp;
+        float slotsWidth = w - pad - slotsLeft;
+        int n = Math.min(state.count, MAX_SLOTS);
+        float slotW = slotsWidth / Math.max(n, 3);
         float hexR = Math.min(slotW / SQRT3 * 0.96f, (h - labelH - 2 * pad) / 2f);
         hexR = Math.max(hexR, 8 * dp);
-        float hexCy = pad + hexR;
+        float hexCy = pad + hexR + Math.max(0f, (h - 2 * pad - labelH - 2 * hexR) / 2f);
 
         // ---- buttons
-        btnR = Math.min(0.7f * slotW / SQRT3 * 0.92f, hexR * 0.8f);
-        btnCy = pad + hexR;
-        closeCx = pad + 0.35f * slotW;
-        resetCx = pad + 1.05f * slotW;
+        btnR = Math.min(0.7f * unit / SQRT3 * 0.92f, hexR * 0.8f);
+        btnCy = hexCy;
+        closeCx = pad + 0.35f * unit;
+        resetCx = pad + 1.05f * unit;
         drawButton(c, closeCx, btnCy, btnR, true);
         drawButton(c, resetCx, btnCy, btnR, false);
         // status under the buttons
-        float statusW = debug ? w - 2 * pad : 1.4f * slotW;
+        float statusW = debug ? w - 2 * pad : 1.4f * unit;
         String st = TextUtils.ellipsize(status, small, statusW, TextUtils.TruncateAt.END).toString();
         small.setColor(debug ? 0xFFFFE08A : 0xFFB8C4CC);
         c.drawText(st, pad, h - pad - small.descent(), small);
 
         // ---- glyph slots
-        float slotsLeft = pad + 1.4f * slotW + 6 * dp;
-        float slotsWidth = w - pad - slotsLeft;
-        int n = Math.min(state.count, MAX_SLOTS);
         if (n == 0) {
             String hint = state.onGlyphScreen ? "Lese Glyph-Sequenz…" : "Warte auf Glyph-Hack…";
             label.setColor(0xFF8FA3AD);
-            c.drawText(hint, slotsLeft + 4 * dp, hexCy + label.getTextSize() / 3, label);
+            label.setTextSize(baseLabelSize);
+            c.drawText(hint, slotsLeft + 4 * dp, h / 2f + label.getTextSize() / 3, label);
             label.setColor(Color.WHITE);
             return;
         }
@@ -184,11 +193,11 @@ final class GlyphStripView extends View {
             String text;
             if (g == 0) text = showingNow ? "…" : "";
             else text = name != null ? name : "?";
-            if (!text.isEmpty()) {
+            if (showNames && !text.isEmpty()) {
                 label.setColor(inputNow ? 0xFFFFC65C : Color.WHITE);
                 CharSequence t = TextUtils.ellipsize(text, label, slotW - 2 * dp, TextUtils.TruncateAt.END);
                 float tw = label.measureText(t, 0, t.length());
-                c.drawText(t, 0, t.length(), cx - tw / 2f, hexCy + hexR + labelH * 0.85f, label);
+                c.drawText(t, 0, t.length(), cx - tw / 2f, hexCy + hexR + labelH * 0.8f, label);
             }
         }
         label.setColor(Color.WHITE);

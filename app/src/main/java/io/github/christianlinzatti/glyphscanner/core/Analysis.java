@@ -12,15 +12,23 @@ public final class Analysis {
     public final int current;
     /** Detected edges of the glyph currently on screen (bitmask over base edges). */
     public final long edges;
+    /** The 11-node grid is visible (also when our own overlay hides the hexagon row). */
+    public final boolean gridVisible;
     /** Short human readable diagnostics. */
     public final String debug;
 
     public Analysis(boolean glyphScreen, boolean inputPhase, int count, int current, long edges, String debug) {
+        this(glyphScreen, inputPhase, count, current, edges, glyphScreen, debug);
+    }
+
+    public Analysis(boolean glyphScreen, boolean inputPhase, int count, int current, long edges,
+                    boolean gridVisible, String debug) {
         this.glyphScreen = glyphScreen;
         this.inputPhase = inputPhase;
         this.count = count;
         this.current = current;
         this.edges = edges;
+        this.gridVisible = gridVisible;
         this.debug = debug;
     }
 

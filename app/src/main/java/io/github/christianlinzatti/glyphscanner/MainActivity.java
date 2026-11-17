@@ -19,6 +19,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -75,6 +76,52 @@ public class MainActivity extends Activity {
         launchIngress.setChecked(prefs.getBoolean("launch_ingress", true));
         launchIngress.setOnCheckedChangeListener((b, c) -> prefs.edit().putBoolean("launch_ingress", c).apply());
         root.addView(launchIngress);
+
+        TextView settings = text("Einstellungen");
+        settings.setTextColor(0xFF6FE3C6);
+        settings.setTypeface(Typeface.DEFAULT_BOLD);
+        settings.setPadding(0, dp(20), 0, 0);
+        root.addView(settings);
+
+        CheckBox names = new CheckBox(this);
+        names.setText("Namen unter den Glyphen anzeigen");
+        names.setTextColor(Color.WHITE);
+        names.setChecked(prefs.getBoolean(OverlayController.KEY_SHOW_NAMES, true));
+        names.setOnCheckedChangeListener((b, c) ->
+                prefs.edit().putBoolean(OverlayController.KEY_SHOW_NAMES, c).apply());
+        root.addView(names);
+
+        final TextView sizeLabel = text("");
+        root.addView(sizeLabel);
+        SeekBar size = new SeekBar(this);
+        // 100 % .. 250 % in steps of 10
+        size.setMax(15);
+        int current = prefs.getInt(CaptureService.KEY_ICON_SCALE, CaptureService.DEFAULT_ICON_SCALE);
+        size.setProgress(Math.max(0, Math.min(15, (current - 100) / 10)));
+        sizeLabel.setText(sizeText(current));
+        size.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                int pct = 100 + progress * 10;
+                sizeLabel.setText(sizeText(pct));
+                prefs.edit().putInt(CaptureService.KEY_ICON_SCALE, pct).apply();
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar bar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar bar) {
+            }
+        });
+        root.addView(size);
+        TextView sizeHint = text("Während der Anzeige bleibt die Leiste schmal (sie darf die Hexagon-Reihe "
+                + "nicht verdecken). Sobald du zeichnest, wird sie auf diese Größe vergrößert. "
+                + "100 % = nie vergrößern.");
+        sizeHint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        sizeHint.setTextColor(0xFF8FA3AD);
+        root.addView(sizeHint);
 
         root.addView(button("Starten", v -> start()));
         root.addView(button("Beenden", v -> {
@@ -168,6 +215,10 @@ public class MainActivity extends Activity {
             }
         }
         state.postDelayed(this::refresh, 500);
+    }
+
+    private static String sizeText(int pct) {
+        return "Glyph-Größe beim Zeichnen: " + pct + " %";
     }
 
     // ------------------------------------------------------------------ tiny UI helpers

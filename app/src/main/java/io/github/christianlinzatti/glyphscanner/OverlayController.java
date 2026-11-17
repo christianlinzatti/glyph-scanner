@@ -22,6 +22,7 @@ final class OverlayController implements GlyphStripView.Listener {
     }
 
     private static final String KEY_Y = "overlay_y";
+    static final String KEY_SHOW_NAMES = "show_names";
 
     private final Context ctx;
     private final SharedPreferences prefs;
@@ -31,6 +32,8 @@ final class OverlayController implements GlyphStripView.Listener {
     private WindowManager.LayoutParams lp;
     private int dragStartY;
     private int screenH;
+    private int compactHeight;
+    private boolean expanded;
 
     OverlayController(Context ctx, SharedPreferences prefs, Callbacks callbacks) {
         this.ctx = ctx;
@@ -53,6 +56,8 @@ final class OverlayController implements GlyphStripView.Listener {
         float slotW = screenW / 6.4f;
         int wanted = (int) (slotW * 1.05f + 20 * density);
         int height = Math.max((int) (48 * density), Math.min(wanted, maxH));
+        compactHeight = height;
+        expanded = false;
 
         view = new GlyphStripView(ctx, this);
         int flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -84,8 +89,30 @@ final class OverlayController implements GlyphStripView.Listener {
         view = null;
     }
 
+    /**
+     * Large mode for the drawing phase. The glyphs are already locked then, so the strip may
+     * cover Ingress' hexagon row; it stops above the countdown (~18.5 % of the height).
+     */
+    void setExpanded(boolean expand, float scale) {
+        if (view == null) return;
+        int target = compactHeight;
+        if (expand && scale > 1.01f) {
+            int limit = lp.y < 0.185f * screenH
+                    ? (int) (0.185f * screenH) - lp.y
+                    : screenH - lp.y;
+            target = Math.max(compactHeight, Math.min(Math.round(compactHeight * scale), limit));
+        }
+        if (expanded == expand && lp.height == target) return;
+        expanded = expand;
+        lp.height = target;
+        try {
+            wm.updateViewLayout(view, lp);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
     void update(SequenceTracker.State state, String status, boolean debug) {
-        if (view != null) view.setData(state, status, debug);
+        if (view != null) view.setData(state, status, debug, prefs.getBoolean(KEY_SHOW_NAMES, true));
     }
 
     @Override
