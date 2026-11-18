@@ -19,6 +19,8 @@ final class OverlayController implements GlyphStripView.Listener {
         void onResetRequested();
 
         void onDebugToggled();
+
+        void onGlyphClicked(long glyph);
     }
 
     private static final String KEY_Y = "overlay_y";
@@ -128,6 +130,11 @@ final class OverlayController implements GlyphStripView.Listener {
     @Override
     public void onDebugToggled() {
         callbacks.onDebugToggled();
+    }
+
+    @Override
+    public void onGlyphClicked(long glyph) {
+        callbacks.onGlyphClicked(glyph);
     }
 
     @Override

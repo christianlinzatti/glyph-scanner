@@ -38,6 +38,7 @@ public class CaptureService extends Service implements OverlayController.Callbac
 
     public static final String ACTION_START = "start";
     public static final String ACTION_STOP = "stop";
+    public static final String ACTION_REFRESH = "refresh";
     public static final String EXTRA_RESULT_CODE = "resultCode";
     public static final String EXTRA_RESULT_DATA = "resultData";
     static final String PREFS = "glyphscanner";
@@ -94,6 +95,14 @@ public class CaptureService extends Service implements OverlayController.Callbac
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (ACTION_REFRESH.equals(intent.getAction())) {
+            if (overlay != null) {
+                lastStatus = "";
+                overlay.update(tracker.snapshot(), "Name gespeichert", debug);
+            }
+            if (projection == null) stopSelf();
+            return START_NOT_STICKY;
+        }
         if (projection != null) return START_NOT_STICKY; // already running
 
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -129,6 +138,7 @@ public class CaptureService extends Service implements OverlayController.Callbac
         }, main);
 
         restoreCalibration();
+        GlyphStore.load(this);
 
         worker = new HandlerThread("glyph-capture");
         worker.start();
@@ -153,6 +163,7 @@ public class CaptureService extends Service implements OverlayController.Callbac
         }
         overlay.update(SequenceTracker.State.empty(), "Bereit", false);
         running = true;
+        GlyphTileService.refresh(this);
         return START_NOT_STICKY;
     }
 
@@ -264,7 +275,9 @@ public class CaptureService extends Service implements OverlayController.Callbac
     }
 
     private static String statusText(SequenceTracker.State s, boolean expanded) {
-        if (expanded && !s.onGlyphScreen) return "Eingabe";
+        if (expanded && !s.onGlyphScreen) {
+            return s.inputIndex >= 0 ? "Zeichne " + (s.inputIndex + 1) + "/" + s.count : "Eingabe";
+        }
         if (!s.onGlyphScreen) return s.count > 0 ? "Fertig" : "Bereit";
         if (s.inputPhase) return s.inputIndex >= 0 ? "Zeichne " + (s.inputIndex + 1) + "/" + s.count : "Eingabe";
         if (s.displayIndex >= 0) return "Lese " + (s.displayIndex + 1) + "/" + s.count;
@@ -311,6 +324,15 @@ public class CaptureService extends Service implements OverlayController.Callbac
     }
 
     @Override
+    public void onGlyphClicked(long glyph) {
+        try {
+            startActivity(LabelActivity.intent(this, glyph));
+        } catch (RuntimeException e) {
+            Log.w(TAG, "cannot open label screen", e);
+        }
+    }
+
+    @Override
     public void onDebugToggled() {
         debug = !debug;
         lastStatus = "";
@@ -322,6 +344,7 @@ public class CaptureService extends Service implements OverlayController.Callbac
     @Override
     public void onDestroy() {
         running = false;
+        GlyphTileService.refresh(this);
         if (overlay != null) {
             overlay.hide();
             overlay = null;

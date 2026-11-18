@@ -89,8 +89,9 @@ public final class ScreenAnalyzer {
         if (row == null) {
             int nodes = countNodes(f);
             if (nodes >= 9) {
-                return new Analysis(false, timerVisible(f), 0, -1, 0L, true,
-                        "Gitter " + nodes + "/11, Reihe verdeckt");
+                long edges = detectEdges(f);
+                return new Analysis(false, timerVisible(f), 0, -1, edges, true,
+                        "Gitter " + nodes + "/11, Reihe verdeckt | " + Long.bitCount(edges) + " Linien");
             }
             return Analysis.none("keine Glyph-Reihe");
         }

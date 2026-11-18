@@ -2,12 +2,12 @@ package io.github.christianlinzatti.glyphscanner;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -23,11 +23,11 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import io.github.christianlinzatti.glyphscanner.core.GlyphDictionary;
+
 public class MainActivity extends Activity {
 
-    private static final int REQ_CAPTURE = 1;
     private static final int REQ_NOTIFICATIONS = 2;
-    private static final String INGRESS_PACKAGE = "com.nianticproject.ingress";
 
     private TextView state;
     private Button overlayButton;
@@ -58,6 +58,9 @@ public class MainActivity extends Activity {
                         + "2. „Starten“ tippen und die Bildschirmaufnahme erlauben "
                         + "(bei Nachfrage „Gesamter Bildschirm“ wählen).\n"
                         + "3. In Ingress einen Glyph-Hack starten – die Sequenz erscheint oben.\n\n"
+                        + "Schnellstart: Kachel „Glyph Scanner“ in den Schnelleinstellungen hinzufügen "
+                        + "oder App-Symbol lange drücken → „Schnellstart“.\n\n"
+                        + "Tippe im Overlay auf eine Glyphe, um ihr einen eigenen Namen zu geben.\n\n"
                         + "Overlay: ✕ beendet, ↻ leert die Anzeige (passiert 8 s nach dem Hack auch automatisch), ↻ lange drücken = Diagnose. "
                         + "Die Leiste lässt sich vertikal verschieben – nicht über die Hexagon-Reihe von Ingress legen.");
         root.addView(info);
@@ -128,6 +131,7 @@ public class MainActivity extends Activity {
             startService(new Intent(this, CaptureService.class).setAction(CaptureService.ACTION_STOP));
             state.postDelayed(this::refresh, 300);
         }));
+        root.addView(button("Gelernte Glyphen", v -> showLearned()));
         root.addView(button("Kalibrierung & Position zurücksetzen", v -> {
             CaptureService.clearCalibration(prefs);
             OverlayController.resetPosition(prefs);
@@ -189,36 +193,32 @@ public class MainActivity extends Activity {
     }
 
     private void requestCapture() {
-        MediaProjectionManager mpm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-        startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAPTURE);
+        startActivity(new Intent(this, StartActivity.class));
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQ_CAPTURE) return;
-        if (resultCode != RESULT_OK || data == null) {
-            Toast.makeText(this, "Bildschirmaufnahme wurde nicht erlaubt", Toast.LENGTH_SHORT).show();
+    private void showLearned() {
+        GlyphStore.load(this);
+        final java.util.List<java.util.Map.Entry<Long, String>> list =
+                new java.util.ArrayList<>(GlyphDictionary.customNames().entrySet());
+        if (list.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Gelernte Glyphen")
+                    .setMessage("Noch keine. Tippe im Overlay auf eine Glyphe (z. B. ein „?“), um ihr einen Namen zu geben.")
+                    .setPositiveButton("OK", null)
+                    .show();
             return;
         }
-        Intent svc = new Intent(this, CaptureService.class)
-                .setAction(CaptureService.ACTION_START)
-                .putExtra(CaptureService.EXTRA_RESULT_CODE, resultCode)
-                .putExtra(CaptureService.EXTRA_RESULT_DATA, data);
-        startForegroundService(svc);
-
-        if (launchIngress.isChecked()) {
-            Intent ingress = getPackageManager().getLaunchIntentForPackage(INGRESS_PACKAGE);
-            if (ingress != null) {
-                startActivity(ingress);
-                return;
-            }
+        list.sort((x, y) -> x.getValue().compareToIgnoreCase(y.getValue()));
+        String[] items = new String[list.size()];
+        for (int i = 0; i < items.length; i++) {
+            String builtIn = GlyphDictionary.builtIn(list.get(i).getKey());
+            items[i] = list.get(i).getValue() + (builtIn != null ? "  (statt " + builtIn + ")" : "");
         }
-        state.postDelayed(this::refresh, 500);
-    }
-
-    private static String sizeText(int pct) {
-        return "Glyph-Größe beim Zeichnen: " + pct + " %";
+        new AlertDialog.Builder(this)
+                .setTitle("Gelernte Glyphen – antippen zum Ändern")
+                .setItems(items, (d, which) -> startActivity(LabelActivity.intent(this, list.get(which).getKey())))
+                .setNegativeButton("Schließen", null)
+                .show();
     }
 
     // ------------------------------------------------------------------ tiny UI helpers

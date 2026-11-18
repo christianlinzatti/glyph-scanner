@@ -28,6 +28,11 @@ public final class SequenceTracker {
     private int pendingCount = -1;
     private int jumpBackFrames;
 
+    // stroke counting while the hexagon row is hidden (done slots turn yellow / our strip covers it)
+    private int cursor = -1;
+    private boolean strokeArmed;
+    private int drawFrames, clearFrames;
+
     private long prevEdges;
     private int prevIndex = -1;
 
@@ -48,6 +53,8 @@ public final class SequenceTracker {
         prevIndex = -1;
         displayIndex = -1;
         inputIndex = -1;
+        cursor = -1;
+        strokeArmed = false;
     }
 
     @SuppressWarnings("unchecked")
@@ -63,6 +70,10 @@ public final class SequenceTracker {
         prevEdges = 0;
         prevIndex = -1;
         inputIndex = -1;
+        cursor = -1;
+        strokeArmed = false;
+        drawFrames = 0;
+        clearFrames = 0;
     }
 
     /** @return true if anything visible in the overlay changed. */
@@ -74,8 +85,14 @@ public final class SequenceTracker {
 
         if (!a.glyphScreen || a.count <= 0) {
             displayIndex = -1;
-            inputIndex = -1;
             inputPhase = false;
+            if (locked && count > 0) {
+                if (cursor < 0) cursor = 0;
+                countStrokes(a);
+                inputIndex = cursor < count ? cursor : -1;
+            } else {
+                inputIndex = -1;
+            }
             return !before.equals(signature());
         }
 
@@ -125,8 +142,34 @@ public final class SequenceTracker {
             inputPhase = locked;
             displayIndex = -1;
             inputIndex = (locked && a.count == count) ? a.current : -1;
+            if (inputIndex >= 0) {
+                // the hexagon row is the truth whenever we can see it
+                cursor = inputIndex;
+                strokeArmed = false;
+                drawFrames = 0;
+                clearFrames = 0;
+            }
         }
         return !before.equals(signature());
+    }
+
+    /**
+     * One drawn glyph = lines visible for a few frames, then the grid is empty (or gone)
+     * for a few frames. Each such episode moves the cursor to the next slot.
+     */
+    private void countStrokes(Analysis a) {
+        boolean drawing = a.gridVisible && a.edges != 0;
+        if (drawing) {
+            clearFrames = 0;
+            if (++drawFrames >= 2) strokeArmed = true;
+        } else {
+            drawFrames = 0;
+            if (strokeArmed && ++clearFrames >= 2) {
+                cursor++;
+                strokeArmed = false;
+                clearFrames = 0;
+            }
+        }
     }
 
     private static long pick(Map<Long, Integer> v) {

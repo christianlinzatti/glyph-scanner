@@ -27,6 +27,8 @@ final class GlyphStripView extends View {
 
         void onDebugToggled();
 
+        void onGlyphClicked(long glyph);
+
         void onDragStart();
 
         void onDrag(float dy);
@@ -60,6 +62,10 @@ final class GlyphStripView extends View {
 
     // button geometry, updated in onDraw
     private float closeCx, resetCx, btnCy, btnR;
+    // slot geometry for taps
+    private final float[] slotCx = new float[MAX_SLOTS];
+    private int slotCount;
+    private float slotCy, slotR;
 
     private float downRawY;
     private boolean dragging, longPressFired;
@@ -155,6 +161,7 @@ final class GlyphStripView extends View {
 
         // ---- glyph slots
         if (n == 0) {
+            slotCount = 0;
             String hint = state.onGlyphScreen ? "Lese Glyph-Sequenz…" : "Warte auf Glyph-Hack…";
             label.setColor(0xFF8FA3AD);
             label.setTextSize(baseLabelSize);
@@ -163,8 +170,12 @@ final class GlyphStripView extends View {
             return;
         }
         float start = slotsLeft + (slotsWidth - n * slotW) / 2f;
+        slotCount = n;
+        slotCy = hexCy;
+        slotR = hexR;
         for (int i = 0; i < n; i++) {
             float cx = start + slotW * (i + 0.5f);
+            slotCx[i] = cx;
             long g = state.glyphs[i];
             String name = g == 0 ? null : GlyphDictionary.shortName(g);
             boolean inputNow = state.inputIndex == i;
@@ -278,6 +289,12 @@ final class GlyphStripView extends View {
                 } else if (!longPressFired) {
                     if (hit(ev, closeCx)) listener.onCloseClicked();
                     else if (hit(ev, resetCx)) listener.onResetClicked();
+                    else {
+                        int slot = slotAt(ev);
+                        if (slot >= 0 && slot < state.glyphs.length && state.glyphs[slot] != 0) {
+                            listener.onGlyphClicked(state.glyphs[slot]);
+                        }
+                    }
                 }
                 return true;
             case MotionEvent.ACTION_CANCEL:
@@ -287,6 +304,14 @@ final class GlyphStripView extends View {
             default:
                 return true;
         }
+    }
+
+    private int slotAt(MotionEvent ev) {
+        for (int i = 0; i < slotCount; i++) {
+            float dx = ev.getX() - slotCx[i], dy = ev.getY() - slotCy;
+            if (dx * dx + dy * dy <= slotR * slotR * 1.2f) return i;
+        }
+        return -1;
     }
 
     private boolean hit(MotionEvent ev, float cx) {

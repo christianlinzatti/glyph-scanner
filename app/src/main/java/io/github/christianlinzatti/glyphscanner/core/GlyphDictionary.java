@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Glyph dictionary. Codes use the node numbering of gm9/ingress-glyph-tools
@@ -180,16 +181,40 @@ public final class GlyphDictionary {
         }
     }
 
+    /** Names the user taught the app; they win over the built-in list. */
+    private static final Map<Long, String> CUSTOM = new ConcurrentHashMap<>();
+
     private GlyphDictionary() {
+    }
+
+    public static void setCustom(long mask, String name) {
+        if (name == null || name.trim().isEmpty()) CUSTOM.remove(mask);
+        else CUSTOM.put(mask, name.trim());
+    }
+
+    public static String custom(long mask) {
+        return CUSTOM.get(mask);
+    }
+
+    public static Map<Long, String> customNames() {
+        return new HashMap<>(CUSTOM);
+    }
+
+    /** Built-in names only (ignores custom names), or null. */
+    public static String builtIn(long mask) {
+        return NAMES.get(mask);
     }
 
     /** All names for the glyph, or null if unknown. */
     public static String names(long mask) {
-        return NAMES.get(mask);
+        String c = CUSTOM.get(mask);
+        return c != null ? c : NAMES.get(mask);
     }
 
     /** Short display name (first name), or null if unknown. */
     public static String shortName(long mask) {
+        String c = CUSTOM.get(mask);
+        if (c != null) return c;
         String n = NAMES.get(mask);
         if (n == null) return null;
         int i = n.indexOf(" / ");
