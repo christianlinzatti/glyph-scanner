@@ -221,6 +221,10 @@ public class MainActivity extends Activity {
                 .show();
     }
 
+    private static String sizeText(int pct) {
+        return "Glyph-Größe beim Zeichnen: " + pct + " %";
+    }
+
     // ------------------------------------------------------------------ tiny UI helpers
 
     private int dp(int v) {
